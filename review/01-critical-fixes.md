@@ -143,7 +143,6 @@ export GATOR_DB_NAME="gator"
 - Use environment variables or secret management tools
 - Rotate credentials regularly
 - Use strong, randomly generated passwords
-```
 
 **Additional Changes Needed:**
 1. Update Hub code to read from environment variables
