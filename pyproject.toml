@@ -73,6 +73,12 @@ docstring-code-line-length = "dynamic"
 minversion = "6.0"
 addopts = "--cov=gator --cov-branch --cov-report html --cov-report term -x"
 testpaths = ["tests"]
+filterwarnings = [
+    # Ignore RuntimeWarnings from unittest.mock interacting with asyncio internals
+    # This is a known issue when mocking async code and doesn't affect test correctness
+    "ignore::RuntimeWarning:asyncio",
+    "ignore::RuntimeWarning:unittest.mock",
+]
 
 [tool.poe.tasks.npm_build]
 shell = "cd gator-hub && npm run build"

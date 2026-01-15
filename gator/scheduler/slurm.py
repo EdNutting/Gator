@@ -15,7 +15,6 @@
 import asyncio
 import getpass
 import os
-import subprocess
 from datetime import datetime, timedelta
 from enum import IntEnum
 from pathlib import Path
@@ -66,6 +65,7 @@ class SlurmScheduler(BaseScheduler):
         self._job_ids: list[int] = []
         self._stdout_dirx: Path = self.tracking / "slurm"
         self._stdout_dirx.mkdir(exist_ok=True, parents=True)
+        self._token_lock = asyncio.Lock()
 
     @property
     def expired(self) -> bool:
@@ -73,30 +73,81 @@ class SlurmScheduler(BaseScheduler):
 
     @property
     def token(self) -> str:
-        if self.expired:
-            result = subprocess.run(
-                [
-                    "scontrol",
-                    "token",
-                    f"lifespan={int(self._interval*1.1)}",
-                    f"username={self._username}",
-                ],
-                capture_output=True,
-                timeout=5,
-                check=True,
+        """
+        Get the current token value.
+
+        Note: This property returns the cached token. To refresh the token,
+        call _refresh_token() from an async context before accessing this property.
+
+        Raises:
+            SchedulerError: If no token has been fetched yet.
+        """
+        if self._token is None:
+            raise SchedulerError(
+                "Slurm token not initialized. Call _refresh_token() before accessing token."
             )
-            stdout = result.stdout.decode("utf-8").strip()
-            if not stdout.startswith("SLURM_JWT="):
-                raise SchedulerError(f"Failed to extract Slurm JWT from STDOUT: {stdout}")
-            self._token = stdout.split("SLURM_JWT=")[1].strip()
-            self._expiry = datetime.now() + timedelta(seconds=self._interval)
         return self._token
 
+    async def _refresh_token(self) -> None:
+        """
+        Refresh the Slurm JWT token if expired.
+
+        Uses double-check locking pattern for efficiency while maintaining
+        thread safety. The lock provides defensive synchronization.
+        """
+        # First check without lock (fast path for unexpired tokens)
+        if not self.expired:
+            return
+
+        # Acquire lock for refresh
+        async with self._token_lock:
+            # Double-check after acquiring lock (defensive pattern)
+            if not self.expired:
+                return
+
+            # Perform async subprocess call to get token
+            proc = await asyncio.create_subprocess_exec(
+                "scontrol",
+                "token",
+                f"lifespan={int(self._interval*1.1)}",
+                f"username={self._username}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            try:
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5.0)
+            except asyncio.TimeoutError as e:
+                proc.kill()
+                await proc.wait()
+                raise SchedulerError("Timeout while fetching Slurm JWT token") from e
+
+            if proc.returncode != 0:
+                stderr_msg = stderr.decode("utf-8").strip() if stderr else "Unknown error"
+                raise SchedulerError(
+                    f"Failed to fetch Slurm JWT token (exit code {proc.returncode}): {stderr_msg}"
+                )
+
+            stdout_str = stdout.decode("utf-8").strip()
+            if not stdout_str.startswith("SLURM_JWT="):
+                raise SchedulerError(f"Failed to extract Slurm JWT from STDOUT: {stdout_str}")
+
+            self._token = stdout_str.split("SLURM_JWT=")[1].strip()
+            self._expiry = datetime.now() + timedelta(seconds=self._interval)
+
     def clear_token(self):
+        """
+        Force token expiry to trigger refresh on next access.
+
+        This is typically called when authentication fails and a new token
+        is needed. The next call to _refresh_token() will fetch a new token.
+        """
         self._token = None
         self._expiry = None
 
-    def get_session(self) -> aiohttp.ClientSession:
+    async def get_session(self) -> aiohttp.ClientSession:
+        """Create an aiohttp session with current authentication token."""
+        await self._refresh_token()  # Ensure token is valid before creating session
         return aiohttp.ClientSession(
             base_url=self._api_root + (f"/slurm/{self._api_version}/" if self._api_version else ""),
             headers={
@@ -113,7 +164,7 @@ class SlurmScheduler(BaseScheduler):
         backoff: float = 1.0,
     ) -> dict[str, str]:
         for idx in range(retries):
-            async with self.get_session() as session:
+            async with await self.get_session() as session:
                 async with session.post(route, json=payload) as resp:
                     data = await resp.json()
                     err_nums = [x.get("error_number", None) for x in data.get("errors", [])]
@@ -142,7 +193,7 @@ class SlurmScheduler(BaseScheduler):
         backoff: float = 1.0,
     ) -> dict[str, str]:
         for idx in range(retries):
-            async with self.get_session() as session:
+            async with await self.get_session() as session:
                 async with session.get(route) as resp:
                     data = await resp.json()
                     err_nums = [x.get("error_number", None) for x in data.get("errors", [])]
@@ -167,7 +218,7 @@ class SlurmScheduler(BaseScheduler):
     async def launch(self, tasks: List[Child]) -> None:
         # Figure out the active API version of Slurm REST interface
         if not self._api_version:
-            async with self.get_session() as session:
+            async with await self.get_session() as session:
                 async with session.get("openapi/v3") as resp:
                     data = await resp.json()
                     slurm_roots = [x for x in data["paths"] if x.startswith("/slurm/")]
