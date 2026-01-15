@@ -214,7 +214,10 @@ class Database:
 
             async def _push(item: descr) -> Optional[int]:
                 if self.readonly:
-                    raise RuntimeError("Can't push to read-only database!")
+                    raise RuntimeError(
+                        "Cannot insert into read-only database. "
+                        "Open database with readonly=False to enable write operations."
+                    )
                 nonlocal sql_put, transforms_put
                 if not isinstance(item, descr):
                     raise TypeError(
@@ -238,7 +241,10 @@ class Database:
 
             async def _update(item: descr) -> None:
                 if self.readonly:
-                    raise RuntimeError("Can't update read-only database!")
+                    raise RuntimeError(
+                        "Cannot update read-only database. "
+                        "Open database with readonly=False to enable write operations."
+                    )
                 nonlocal sql_update, transforms_put
                 if not isinstance(item, descr):
                     raise TypeError(

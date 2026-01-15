@@ -249,7 +249,10 @@ class BaseLayer:
     @property
     def server(self) -> WebsocketServer:
         if (value := getattr(self, "__server", None)) is None:
-            raise AttributeError("Server not set yet!")
+            raise AttributeError(
+                "WebSocket server has not been initialized. "
+                "Ensure the server is set before accessing this property."
+            )
         return value
 
     @server.setter
@@ -259,7 +262,10 @@ class BaseLayer:
     @property
     def client(self) -> WebsocketClient:
         if (value := getattr(self, "__client", None)) is None:
-            raise AttributeError("Client not set yet!")
+            raise AttributeError(
+                "WebSocket client has not been initialized. "
+                "Ensure the client is set before accessing this property."
+            )
         return value
 
     @client.setter
@@ -269,7 +275,10 @@ class BaseLayer:
     @property
     def db(self) -> BaseDatabase:
         if (value := getattr(self, "__db", None)) is None:
-            raise AttributeError("db not set yet!")
+            raise AttributeError(
+                "Database has not been initialized. "
+                "Ensure the database is set before accessing this property."
+            )
         return value
 
     @db.setter

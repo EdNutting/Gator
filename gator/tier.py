@@ -238,7 +238,12 @@ class Tier(BaseLayer):
                 return {"spec": Spec.dump(self.jobs_launched[ident].spec)}
             else:
                 await self.logger.error(f"Unknown child of {self.ident} query '{ident}'")
-                raise Exception(f"Bad child ident {ident}")
+                available_idents = list(self.jobs_launched.keys())
+                idents_str = available_idents if available_idents else 'none'
+                raise ValueError(
+                    f"Unknown child job identifier '{ident}' queried by parent '{self.ident}'. "
+                    f"Available launched child identifiers: {idents_str}"
+                )
 
     async def __child_started(self, ws: WebsocketWrapper, ident: str, server: str, **_):
         """
@@ -264,7 +269,12 @@ class Tier(BaseLayer):
                 }
             else:
                 await self.logger.error(f"Unknown child of {self.ident} start '{ident}'")
-                raise Exception(f"Bad child ident {ident}")
+                available_idents = list(self.jobs_launched.keys())
+                idents_str = available_idents if available_idents else 'none'
+                raise ValueError(
+                    f"Unknown child job identifier '{ident}' started for parent '{self.ident}'. "
+                    f"Available launched child identifiers: {idents_str}"
+                )
 
     async def __child_updated(
         self,
@@ -318,10 +328,20 @@ class Tier(BaseLayer):
                 await self.logger.error(
                     f"Child {ident} of {self.ident} sent update after completion"
                 )
-                raise Exception("Child sent update after completion")
+                raise RuntimeError(
+                    f"Child job '{ident}' attempted to send status update after already "
+                    f"reporting completion. This indicates a job lifecycle state machine violation "
+                    f"where a completed job is attempting to transition back to an active state."
+                )
             else:
                 await self.logger.error(f"Unknown child {ident} of {self.ident} update")
-                raise Exception(f"Bad child ident {ident}")
+                available_launched = list(self.jobs_launched.keys())
+                available_completed = list(self.jobs_completed.keys())
+                raise ValueError(
+                    f"Unknown child job identifier '{ident}' sent update to parent '{self.ident}'. "
+                    f"Launched children: {available_launched if available_launched else 'none'}. "
+                    f"Completed children: {available_completed if available_completed else 'none'}"
+                )
 
     async def __child_completed(
         self,
@@ -377,7 +397,12 @@ class Tier(BaseLayer):
                     await self.logger.error(
                         f"Child {ident} of {self.ident} reported active jobs on completion"
                     )
-                    raise Exception("Child reported active jobs on completion")
+                    active_count = child.summary.metrics.get("sub_active", 0)
+                    raise RuntimeError(
+                        f"Child job '{ident}' reported {active_count} active sub-jobs in "
+                        f"completion message. All sub-jobs must complete before the parent job "
+                        f"can complete. This indicates a job lifecycle state machine violation."
+                    )
                 child.exitcode = int(code)
                 # Move to the completed store
                 self.jobs_completed[child.ident] = child
@@ -386,10 +411,23 @@ class Tier(BaseLayer):
                 child.e_complete.set()
             elif ident in self.jobs_completed:
                 await self.logger.error(f"Child {ident} of {self.ident} sent repeated completion")
-                raise Exception("Child sent a second completion message")
+                raise RuntimeError(
+                    f"Child job '{ident}' sent duplicate completion message to parent "
+                    f"'{self.ident}'. A job can only complete once. This indicates a job "
+                    f"lifecycle state machine violation or a bug in the child job's "
+                    f"completion logic."
+                )
             else:
                 await self.logger.error(f"Unknown child of {self.ident} completion '{ident}'")
-                raise Exception(f"Bad child ident {ident}")
+                available_launched = list(self.jobs_launched.keys())
+                available_completed = list(self.jobs_completed.keys())
+                launched_str = available_launched if available_launched else 'none'
+                completed_str = available_completed if available_completed else 'none'
+                raise ValueError(
+                    f"Unknown child job identifier '{ident}' sent completion message to parent "
+                    f"'{self.ident}'. Launched children: {launched_str}. "
+                    f"Completed children: {completed_str}"
+                )
 
     async def __postpone(self, ident: str, wait_for: List[Child], to_launch: List[Child]) -> None:
         await asyncio.gather(*(x.e_complete.wait() for x in wait_for))

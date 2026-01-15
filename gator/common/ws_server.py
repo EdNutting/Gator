@@ -60,12 +60,19 @@ class WebsocketServer(WebsocketRouter):
             # Attempt to get the hostname (fully qualified) - run in executor to avoid blocking
             hostname = await loop.run_in_executor(None, socket.getfqdn)
             if not hostname:
-                raise Exception("Blank hostname returned from socket.getfqdn()")
+                raise OSError(
+                    "Failed to resolve hostname: socket.getfqdn() returned empty string. "
+                    "Falling back to alternative IP resolution method."
+                )
             # Get all known IP addresses for this host (note this can raise an
             # exception if the host is unresolvable) - run in executor to avoid blocking
             _, _, ipaddrs = await loop.run_in_executor(None, socket.gethostbyname_ex, hostname)
             if len(ipaddrs) == 0:
-                raise Exception("Blank IP return from socket.gethostbyname()")
+                raise OSError(
+                    f"Failed to resolve IP address for hostname '{hostname}': "
+                    f"socket.gethostbyname_ex() returned no IP addresses. "
+                    f"Falling back to alternative IP resolution method."
+                )
             hostip = ipaddrs[0]
         # If that fails, use a known external host to resolve default route
         except Exception:

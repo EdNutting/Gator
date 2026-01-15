@@ -47,7 +47,13 @@ async def resolve_client(job: ApiResolvable):
         async with database_client(job["db_file"]) as ws:
             yield ws
     else:
-        raise RuntimeError(f"Can't resolve job {job}")
+        status = job['status']
+        status_name = status.name if isinstance(status, JobState) else str(status)
+        raise RuntimeError(
+            f"Cannot resolve job with status {status_name}: "
+            f"job must be in STARTED or COMPLETE state to access client\n"
+            f"  Job: {job}"
+        )
 
 
 class _DBClient:
@@ -61,7 +67,10 @@ class _DBClient:
         if self.db.has_table(ChildEntry):
             children = await self.db.get_childentry()
         elif resolve_path := (root_path or nest_path):
-            raise RuntimeError(f"Tried to resolve `{resolve_path[0]}` in db without child entries")
+            raise RuntimeError(
+                f"Cannot resolve child '{resolve_path[0]}' in database: "
+                f"This indicates the job did not spawn any child jobs."
+            )
 
         # Tunnl down to root
         if root_path:
@@ -73,7 +82,12 @@ class _DBClient:
                             root_path=root_path[1:], nest_path=nest_path, depth=depth
                         )
             else:
-                raise RuntimeError(f"Couldn't find child with ident `{resolve_ident}`")
+                available_idents = [c.ident for c in children]
+                idents_str = available_idents if available_idents else 'none'
+                raise RuntimeError(
+                    f"Cannot find child job with identifier '{resolve_ident}'. "
+                    f"Available child identifiers: {idents_str}"
+                )
 
         # Resolve self
         ident = (await self.db.get_attribute(name="ident"))[0].value
@@ -111,7 +125,12 @@ class _DBClient:
                         )
                         break
             else:
-                raise RuntimeError(f"Couldn't find child with ident `{resolve_ident}`")
+                available_idents = [c.ident for c in children]
+                idents_str = available_idents if available_idents else 'none'
+                raise RuntimeError(
+                    f"Cannot find nested child job with identifier '{resolve_ident}'. "
+                    f"Available child identifiers: {idents_str}"
+                )
         elif depth > 1:
             for child in children:
                 async with database_client(child.db_file) as db:
@@ -176,7 +195,10 @@ class _DBClient:
         return {"messages": messages, "total": total, "status": JobState.COMPLETE}
 
     async def get_tree(self) -> GetTreeResponse:
-        raise NotImplementedError("get_tree")
+        raise NotImplementedError(
+            "get_tree() is not supported for database clients. "
+            "Tree traversal requires WebSocket connections to child jobs."
+        )
 
 
 class _WSClient:
@@ -192,14 +214,22 @@ class _WSClient:
         return await self.ws.get_messages(after=after, limit=limit)
 
     async def get_tree(self) -> GetTreeResponse:
-        raise NotImplementedError("get_tree")
+        raise NotImplementedError(
+            "get_tree() is not supported for WebSocket clients. "
+            "Tree traversal requires database connections to child jobs."
+        )
 
 
 @asynccontextmanager
 async def database_client(path: Union[str, Path]):
     path = Path(path)
     if not path.exists():
-        raise RuntimeError("No Exist")
+        raise RuntimeError(
+            f"Database file does not exist: {path}. "
+            f"Ensure the job has completed and the database file was created successfully."
+            f"Databases for child jobs may not be available - child job info may require"
+            f"a live websocket connection to the child."
+        )
     db = Database(path, readonly=True)
     try:
         await db.start()

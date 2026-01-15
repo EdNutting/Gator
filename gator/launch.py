@@ -95,7 +95,11 @@ async def launch(
         parsed_spec = Spec.parse(Path(spec))
     # - Unknown
     else:
-        raise Exception("No specification file provided and no parent server to query")
+        raise ValueError(
+            "No job specification provided. Either provide a specification file path, "
+            "pass a Job/JobArray/JobGroup object directly, or ensure the job has a parent "
+            "server to query for its specification."
+        )
 
     # Validate spec type for runtime safety and type narrowing
     if not isinstance(parsed_spec, (Job, JobArray, JobGroup)):
