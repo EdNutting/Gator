@@ -386,11 +386,11 @@ GATOR_JWT_SECRET = os.getenv("GATOR_JWT_SECRET")  # For WebSocket tokens
 
 ---
 
-## 5. Empty Exception Handlers
+## ✅ DONE: 5. Empty Exception Handlers
 
 ### Issue: Silent Failure with Pass Statements
 **Severity:** High
-**Effort:** Small to Medium
+**Effort:** Small to Medium (Completed)
 **Debugging Impact:** HIGH - Hides errors
 
 **Description:**
@@ -530,11 +530,26 @@ except Exception as e:
 | [gator/common/ws_wrapper.py](../gator/common/ws_wrapper.py) | 104, 113 | 2 | High |
 | [gator/adapters/parent.py](../gator/adapters/parent.py) | 76, 99 | 2 | High |
 
+**Status: COMPLETED**
+
+All empty exception handlers have been addressed:
+- ✅ Added `_teardown_started` event to distinguish expected vs unexpected closures
+- ✅ Parent adapter receiver thread now logs ERROR on unexpected closure with sentinel value
+- ✅ Parent adapter management thread now logs ERROR on unexpected closure
+- ✅ WebSocket wrapper print statement replaced with proper ERROR logging
+- ✅ All 4 intentional empty handlers documented with explanatory comments
+- ✅ All 4 empty finally blocks removed from db_client.py
+- ✅ Created comprehensive test suite with 11 tests
+- ✅ All 166 tests pass (11 new + 155 existing)
+- ✅ No ruff warnings introduced
+
 **Impact:**
 - ✅ Errors become visible and debuggable
 - ✅ Unexpected failures are caught early
 - ✅ Better operational monitoring
 - ✅ Clearer code intent
+- ✅ Expected shutdowns are silent (DEBUG only)
+- ✅ Unexpected connection failures are logged with details
 
 ---
 

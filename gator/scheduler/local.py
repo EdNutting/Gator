@@ -123,6 +123,8 @@ class LocalScheduler(BaseScheduler):
         try:
             await self.launch_task
         except asyncio.CancelledError:
+            # Expected when stop() cancels the launch task during scheduler shutdown.
+            # The monitors dict will handle cleanup of individual task monitors.
             pass
         await asyncio.gather(*self.monitors.values())
 

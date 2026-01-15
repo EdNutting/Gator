@@ -77,6 +77,9 @@ class Wrapper(BaseLayer):
                     child.kill()
                 top.kill()
             except psutil.NoSuchProcess:
+                # Process already exited before we could kill it. This is a benign race
+                # condition during shutdown and does not require logging - the stop()
+                # goal is achieved either way.
                 pass
 
     async def summarise(self) -> Summary:
@@ -225,6 +228,9 @@ class Wrapper(BaseLayer):
             try:
                 await asyncio.wait_for(done_evt.wait(), timeout=self.interval)
             except asyncio.exceptions.TimeoutError:
+                # Expected timeout from wait_for() - this is how we implement regular
+                # polling at self.interval. The timeout means we should check process
+                # status again and continue monitoring.
                 pass
 
     async def __launch(self) -> None:

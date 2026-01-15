@@ -17,6 +17,7 @@ import atexit
 import dataclasses
 import itertools
 import json
+import logging
 from typing import Any, ClassVar, Dict, Optional, Union
 
 import websockets
@@ -101,9 +102,17 @@ class WebsocketWrapper(WebsocketRouter):
                 except json.JSONDecodeError as e:
                     raise WebsocketWrapperError(f"Failed to decode message: {raw}") from e
         except asyncio.CancelledError:
+            # Expected when stop_monitor() cancels the monitor task during shutdown.
+            # This is part of normal cleanup and should not be logged.
             pass
-        except websockets.exceptions.ConnectionClosedError:
-            print("WEBSOCKET CLOSED UNEXPECTEDLY")
+        except websockets.exceptions.ConnectionClosedError as e:
+            logger = logging.getLogger("gator_ws_wrapper")
+            logger.error(
+                f"WebSocket connection closed unexpectedly during message monitoring: "
+                f"code={e.code if hasattr(e, 'code') else 'unknown'}, "
+                f"reason={e.reason if hasattr(e, 'reason') and e.reason else 'no reason provided'}"
+                f", linked={self.linked}"
+            )
 
     def __getattr__(self, key: str) -> Any:
         # Attempt to resolve

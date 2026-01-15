@@ -40,17 +40,14 @@ from .ws_wrapper import WebsocketWrapper
 
 @asynccontextmanager
 async def resolve_client(job: ApiResolvable):
-    try:
-        if job["status"] == JobState.STARTED:
-            async with downstream_client(job["server_url"]) as ws:
-                yield ws
-        elif job["status"] == JobState.COMPLETE:
-            async with database_client(job["db_file"]) as ws:
-                yield ws
-        else:
-            raise RuntimeError(f"Can't resolve job {job}")
-    finally:
-        pass
+    if job["status"] == JobState.STARTED:
+        async with downstream_client(job["server_url"]) as ws:
+            yield ws
+    elif job["status"] == JobState.COMPLETE:
+        async with database_client(job["db_file"]) as ws:
+            yield ws
+    else:
+        raise RuntimeError(f"Can't resolve job {job}")
 
 
 class _DBClient:
@@ -217,19 +214,13 @@ async def database_client(path: Union[str, Path]):
 
 @asynccontextmanager
 async def downstream_client(server_url: str):
-    try:
-        async with WebsocketClient(server_url) as ws:
-            yield _WSClient(ws)
-    finally:
-        pass
+    async with WebsocketClient(server_url) as ws:
+        yield _WSClient(ws)
 
 
 @asynccontextmanager
 async def websocket_client(websocket: WebsocketWrapper):
-    try:
-        yield _WSClient(websocket)
-    finally:
-        pass
+    yield _WSClient(websocket)
 
 
 @asynccontextmanager
@@ -247,11 +238,8 @@ async def child_client(child: Child):
             )
         client = websocket_client(child.ws)
 
-    try:
-        if client is None:
-            yield None
-        else:
-            async with client as cli:
-                yield cli
-    finally:
-        pass
+    if client is None:
+        yield None
+    else:
+        async with client as cli:
+            yield cli
