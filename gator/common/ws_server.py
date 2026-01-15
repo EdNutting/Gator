@@ -53,24 +53,31 @@ class WebsocketServer(WebsocketRouter):
 
     async def get_address(self) -> str:
         """Returns the URI of the server"""
+        loop = asyncio.get_event_loop()
+
         # First try to establish IP address from hostname
         try:
-            # Attempt to get the hostname (fully qualified)
-            hostname = socket.getfqdn()
+            # Attempt to get the hostname (fully qualified) - run in executor to avoid blocking
+            hostname = await loop.run_in_executor(None, socket.getfqdn)
             if not hostname:
                 raise Exception("Blank hostname returned from socket.getfqdn()")
             # Get all known IP addresses for this host (note this can raise an
-            # exception if the host is unresolvable)
-            _, _, ipaddrs = socket.gethostbyname_ex(hostname)
+            # exception if the host is unresolvable) - run in executor to avoid blocking
+            _, _, ipaddrs = await loop.run_in_executor(None, socket.gethostbyname_ex, hostname)
             if len(ipaddrs) == 0:
                 raise Exception("Blank IP return from socket.gethostbyname()")
             hostip = ipaddrs[0]
         # If that fails, use a known external host to resolve default route
         except Exception:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.connect(("8.8.8.8", 80))
-            hostip = sock.getsockname()[0]
-            sock.close()
+            # Run blocking socket operations in executor to avoid blocking event loop
+            def _get_host_ip():
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.connect(("8.8.8.8", 80))
+                hostip = sock.getsockname()[0]
+                sock.close()
+                return hostip
+
+            hostip = await loop.run_in_executor(None, _get_host_ip)
         port = await self.get_port()
         return f"{hostip}:{port}"
 
@@ -113,10 +120,15 @@ class WebsocketServer(WebsocketRouter):
     async def start(self) -> None:
         # If no port number provided, choose a random one
         if self.__port is None:
-            with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
-                s.bind(("", 0))
-                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                self.__port = s.getsockname()[1]
+            # Run blocking socket operations in executor to avoid blocking event loop
+            def _find_free_port():
+                with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+                    s.bind(("", 0))
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    return s.getsockname()[1]
+
+            loop = asyncio.get_event_loop()
+            self.__port = await loop.run_in_executor(None, _find_free_port)
         self.__port_set.set()
         # Start an asyncio task to run the websocket in the background
         self.__ws = await websockets.serve(self.__handle_client, "0.0.0.0", self.__port)

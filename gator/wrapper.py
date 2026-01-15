@@ -127,7 +127,14 @@ class Wrapper(BaseLayer):
         stdout: asyncio.subprocess.PIPE,
         stderr: asyncio.subprocess.PIPE,
     ) -> None:
-        log_fh = (self.tracking / f"raw_{proc.pid}.log").open("w", encoding="utf-8", buffering=1)
+        # Open log file in executor to avoid blocking
+        loop = asyncio.get_event_loop()
+        log_path = self.tracking / f"raw_{proc.pid}.log"
+
+        def _open_log_file():
+            return log_path.open("w", encoding="utf-8", buffering=1)
+
+        log_fh = await loop.run_in_executor(None, _open_log_file)
         log_lk = asyncio.Lock()
 
         async def _monitor(pipe, severity):
@@ -135,7 +142,8 @@ class Wrapper(BaseLayer):
                 line = await pipe.readline()
                 line = line.decode("utf-8")
                 async with log_lk:
-                    log_fh.write(line)
+                    # Write to file in executor to avoid blocking
+                    await loop.run_in_executor(None, log_fh.write, line)
                 clean = line.rstrip()
                 if len(clean) > 0:
                     await self.logger.log(severity, clean, "stdio")
@@ -143,8 +151,9 @@ class Wrapper(BaseLayer):
         t_stdout = asyncio.create_task(_monitor(stdout, LogSeverity.INFO))
         t_stderr = asyncio.create_task(_monitor(stderr, LogSeverity.ERROR))
         await asyncio.gather(t_stdout, t_stderr)
-        log_fh.flush()
-        log_fh.close()
+        # Flush and close in executor to avoid blocking
+        await loop.run_in_executor(None, log_fh.flush)
+        await loop.run_in_executor(None, log_fh.close)
 
     async def __monitor_usage(
         self,
@@ -293,7 +302,10 @@ class Wrapper(BaseLayer):
         # Setup initial attributes
         await self.db.push_attribute(Attribute(name="cmd", value=full_cmd))
         await self.db.push_attribute(Attribute(name="cwd", value=working_dir.as_posix()))
-        await self.db.push_attribute(Attribute(name="host", value=socket.getfqdn()))
+        # Run blocking socket operation in executor to avoid blocking event loop
+        loop = asyncio.get_event_loop()
+        hostname = await loop.run_in_executor(None, socket.getfqdn)
+        await self.db.push_attribute(Attribute(name="host", value=hostname))
         await self.db.push_attribute(Attribute(name="req_cores", value=str(cpu_cores)))
         await self.db.push_attribute(Attribute(name="req_memory", value=str(memory_mb)))
         await self.db.push_attribute(

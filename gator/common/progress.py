@@ -68,6 +68,11 @@ class PassFailBar(JupyterMixin):
         return f"<Bar {self.completed!r} of {self.total!r}>"
 
     @property
+    def completed(self) -> int:
+        """Calculate the number of completed jobs (passed + failed)."""
+        return self.passed + self.failed
+
+    @property
     def percentage_completed(self) -> Optional[float]:
         """Calculate percentage complete."""
         if self.total is None:
@@ -160,29 +165,32 @@ class PassFailBar(JupyterMixin):
 
 
 if __name__ == "__main__":  # pragma: no cover
-    console = Console()
-    bar = PassFailBar("Regression", 100, 0, 0, 0)
-
+    import asyncio
     import random
-    import time
 
-    console.show_cursor(False)
-    total = 100
-    max_actv = 3
-    last_actv = 0
-    passed = 0
-    failed = 0
-    with Live(bar, refresh_per_second=4) as live:
-        for _ in range(100):
-            max_actv = min(max_actv, total - (passed + failed))
-            if max_actv <= 0:
-                break
-            active = random.randint(0, max_actv)
-            passed += (num_pass := random.randint(0, last_actv))
-            failed += last_actv - num_pass
-            last_actv = active
-            bar.update(total, active, passed, failed)
-            live.update(bar)
-            time.sleep(0.25)
-    console.show_cursor(True)
-    console.print()
+    async def main():
+        console = Console()
+        bar = PassFailBar("Regression", 100, 0, 0, 0)
+
+        console.show_cursor(False)
+        total = 100
+        max_actv = 3
+        last_actv = 0
+        passed = 0
+        failed = 0
+        with Live(bar, refresh_per_second=4) as live:
+            for _ in range(100):
+                max_actv = min(max_actv, total - (passed + failed))
+                if max_actv <= 0:
+                    break
+                active = random.randint(0, max_actv)
+                passed += (num_pass := random.randint(0, last_actv))
+                failed += last_actv - num_pass
+                last_actv = active
+                bar.update(total, active, passed, failed)
+                live.update(bar)
+                await asyncio.sleep(0.25)  # Non-blocking async sleep
+        console.show_cursor(True)
+        console.print()
+
+    asyncio.run(main())

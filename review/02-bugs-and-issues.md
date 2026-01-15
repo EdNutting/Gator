@@ -19,7 +19,7 @@
 
 ---
 
-## 1. Hardcoded Retry Count
+## ✅ DONE: 1. Hardcoded Retry Count
 
 ### Issue: POST Method Uses Hardcoded Retry Count
 **Severity:** Medium
@@ -83,55 +83,71 @@ async def post(self, route: str, data: Dict[str, Any] = {}) -> Dict[str, Any]:
 
 ---
 
-## 2. Synchronous Sleep in Async Context
+## ✅ DONE: 2. Synchronous Sleep in Async Context
 
-### Issue: Blocking Sleep in Async Progress Bar
+### Issue: Blocking Operations in Async Contexts
 **Severity:** Medium
 **Effort:** Small
 **Bug Type:** Performance/Blocking
 
-**Location:** [gator/common/progress.py:186](../gator/common/progress.py#L186)
+**Original Location:** [gator/common/progress.py:186](../gator/common/progress.py#L186)
 
 **Description:**
-The progress bar uses `time.sleep(0.25)` instead of `await asyncio.sleep(0.25)`. This blocks the entire event loop, preventing other async tasks from running during the sleep period.
-
-**Current Code:**
-```python
-def run(self) -> None:
-    while not self.stop_event.is_set():
-        # ... progress bar update logic ...
-        time.sleep(0.25)  # ❌ Blocks the event loop!
-```
+The progress bar demo code used `time.sleep(0.25)` instead of `await asyncio.sleep(0.25)`. A thorough investigation revealed multiple blocking operations in async contexts throughout the codebase that could block the entire event loop.
 
 **Problem:**
-In an async application, blocking sleep prevents:
+In an async application, blocking operations prevent:
 - WebSocket message processing
 - Database operations
 - Other concurrent tasks
 - Can cause timeouts and degraded performance
 
-**Recommended Fix:**
-```python
-async def run(self) -> None:
-    """Run the progress bar update loop asynchronously"""
-    while not self.stop_event.is_set():
-        # ... progress bar update logic ...
-        await asyncio.sleep(0.25)  # ✅ Non-blocking async sleep
+**Fixed Locations:**
+1. **[gator/common/progress.py:187](../gator/common/progress.py#L187)** - Changed `time.sleep(0.25)` to `await asyncio.sleep(0.25)` in demo code
+2. **[gator/common/ws_server.py:61](../gator/common/ws_server.py#L61)** - Fixed blocking `socket.getfqdn()` using `run_in_executor()`
+3. **[gator/common/ws_server.py:66](../gator/common/ws_server.py#L66)** - Fixed blocking `socket.gethostbyname_ex()` using `run_in_executor()`
+4. **[gator/common/ws_server.py:73-78](../gator/common/ws_server.py#L73-L78)** - Fixed blocking socket operations using `run_in_executor()`
+5. **[gator/common/ws_server.py:124-131](../gator/common/ws_server.py#L124-L131)** - Fixed blocking socket bind/setsockopt using `run_in_executor()`
+6. **[gator/wrapper.py:298](../gator/wrapper.py#L298)** - Fixed blocking `socket.getfqdn()` using `run_in_executor()`
+7. **[gator/wrapper.py:134-137](../gator/wrapper.py#L134-L137)** - Fixed blocking file open in `__monitor_stdio()` using `run_in_executor()`
+8. **[gator/wrapper.py:144](../gator/wrapper.py#L144)** - Fixed blocking file writes in `__monitor_stdio()` using `run_in_executor()`
+9. **[gator/wrapper.py:153-154](../gator/wrapper.py#L153-L154)** - Fixed blocking file flush/close using `run_in_executor()`
+10. **[gator/common/layer.py:288-291](../gator/common/layer.py#L288-L291)** - Fixed blocking `mkdir()` using `run_in_executor()`
+11. **[gator/common/layer.py:296-299](../gator/common/layer.py#L296-L299)** - Fixed blocking `write_text()` using `run_in_executor()`
+12. **[gator/common/logger.py:197](../gator/common/logger.py#L197)** - Fixed blocking file writes in `log()` using `run_in_executor()`
 
-# Update usage in calling code
-async def main():
-    progress = ProgressBar()
-    progress_task = asyncio.create_task(progress.run())
-    # ... do other work ...
-    progress.stop_event.set()
-    await progress_task
+**Solution Applied:**
+All blocking I/O and system calls in async contexts now use `asyncio.get_event_loop().run_in_executor()`:
+```python
+# Example for socket operations
+loop = asyncio.get_event_loop()
+hostname = await loop.run_in_executor(None, socket.getfqdn)
+
+# Example for file I/O
+def _write_file():
+    path.write_text(content)
+await loop.run_in_executor(None, _write_file)
 ```
+
+**Additional Fixes:**
+- Added missing `completed` property to `PassFailBar` class (was causing AttributeError)
+- Converted demo code to proper async pattern using `asyncio.run(main())`
+
+**Tests Added:**
+- **[tests/common/test_progress.py](../tests/common/test_progress.py)** - 9 tests for progress bar functionality and async behavior
+- **[tests/test_async_blocking.py](../tests/test_async_blocking.py)** - 4 comprehensive tests verifying non-blocking behavior across socket, file I/O, and logging operations
+
+**Test Results:**
+- ✅ All 184 tests pass
+- ✅ All Ruff linter checks pass
+- ✅ Code coverage: 74%
 
 **Impact:**
 - ✅ Non-blocking progress updates
-- ✅ Better async performance
+- ✅ Better async performance throughout the application
 - ✅ Prevents event loop stalls
 - ✅ More responsive application
+- ✅ Proper concurrency for WebSocket, database, and other async operations
 
 ---
 

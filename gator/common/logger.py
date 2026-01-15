@@ -189,10 +189,12 @@ class Logger:
                         timestamp=timestamp,
                     )
                 )
-            # Tee to file if configured
+            # Tee to file if configured - run in executor to avoid blocking
             if self.__log_fh is not None:
                 date = datetime.now().strftime(r"%H:%M:%S")
-                self.__log_fh.write(f"[{date}] {severity.name:<7s}  {short_hier}  {message}\n")
+                log_line = f"[{date}] {severity.name:<7s}  {short_hier}  {message}\n"
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(None, self.__log_fh.write, log_line)
 
     async def debug(
         self,

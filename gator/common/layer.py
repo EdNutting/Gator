@@ -282,10 +282,21 @@ class BaseLayer:
         self.metrics.set_own("sub_active", 1)
         self.metrics.set_own("sub_passed", 0)
         self.metrics.set_own("sub_failed", 0)
-        # Ensure the tracking directory exists
-        self.tracking.mkdir(exist_ok=True, parents=True)
-        # Dump the spec into the tracking directory
-        (self.tracking / "spec.yaml").write_text(Spec.dump(self.spec))
+        # Ensure the tracking directory exists - run in executor to avoid blocking
+        loop = asyncio.get_event_loop()
+
+        def _make_tracking_dir():
+            self.tracking.mkdir(exist_ok=True, parents=True)
+
+        await loop.run_in_executor(None, _make_tracking_dir)
+        # Dump the spec into the tracking directory - run in executor to avoid blocking
+        spec_content = Spec.dump(self.spec)
+        spec_path = self.tracking / "spec.yaml"
+
+        def _write_spec():
+            spec_path.write_text(spec_content)
+
+        await loop.run_in_executor(None, _write_spec)
         # Create a local database
         self.db = Database(self.tracking / "db.sqlite")
         await self.db.start()
