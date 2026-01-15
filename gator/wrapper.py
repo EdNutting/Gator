@@ -251,12 +251,9 @@ class Wrapper(BaseLayer):
         common_shells = {"sh", "bash", "zsh", "ksh", "csh", "tcsh", "fish", "dash"}
         is_shell_command = Path(command).name in common_shells
         if not is_shell_command:
-            detected_substitutions = []
-            for substitution in find_command_substitutions(command):
-                detected_substitutions.append(substitution[2])  # Extract original_text
+            detected_substitutions = find_command_substitutions(command)
             for arg in args:
-                for substitution in find_command_substitutions(arg):
-                    detected_substitutions.append(substitution[2])  # Extract original_text
+                detected_substitutions.extend(find_command_substitutions(arg))
             if detected_substitutions:
                 substitutions_list = "\n".join(f"  {sub}" for sub in detected_substitutions)
                 await self.logger.warning(
