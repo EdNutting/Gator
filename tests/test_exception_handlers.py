@@ -55,14 +55,14 @@ class TestParentReceiverLogging:
         with patch.object(Parent, '__init__', lambda self, ws_address=None: None):
             parent = Parent()
             parent._teardown_started = teardown_started
-            parent._rx_q = rx_q
+            parent._rx_q = rx_q # type: ignore
 
             # Execute _manage_ws in a way that lets us test _receiver
             # Since _receiver is a nested function, we'll test via integration
             # For now, we'll create a standalone version for testing
             def _receiver(ws, rx_q, logger, teardown_started):
                 try:
-                    for packet in ws:
+                    for _packet in ws:
                         pass
                 except ConnectionClosed as e:
                     if not teardown_started.is_set():
@@ -105,7 +105,7 @@ class TestParentReceiverLogging:
         # Create standalone version of _receiver for testing
         def _receiver(ws, rx_q, logger, teardown_started):
             try:
-                for packet in ws:
+                for _packet in ws:
                     pass
             except ConnectionClosed as e:
                 if not teardown_started.is_set():
@@ -196,7 +196,8 @@ class TestIntentionalExceptionComments:
 
         # Find the NoSuchProcess handler and check for comment
         assert "except psutil.NoSuchProcess:" in source
-        assert ("benign" in source.lower() and "race" in source.lower()) or "already exited" in source.lower()
+        assert (("benign" in source.lower() and "race" in source.lower()) or
+                "already exited" in source.lower())
 
     def test_wrapper_timeout_error_has_comment(self):
         """Check wrapper.py TimeoutError handler has comment"""
@@ -263,7 +264,7 @@ class TestParentIntegration:
             # Verify the teardown mechanism is in place by creating an instance
             with patch('gator.adapters.parent.connect') as mock_connect, \
                  patch('gator.adapters.parent.Thread') as mock_thread, \
-                 patch('gator.adapters.parent.atexit.register') as mock_atexit:
+                 patch('gator.adapters.parent.atexit.register') as _mock_atexit:
                 mock_ws = MagicMock()
                 mock_connect.return_value.__enter__ = Mock(return_value=mock_ws)
                 mock_connect.return_value.__exit__ = Mock(return_value=None)
@@ -274,8 +275,10 @@ class TestParentIntegration:
                 parent = Parent()
 
                 # Verify instance attributes exist
-                assert hasattr(parent, '_teardown_started'), "Parent should have _teardown_started event"
-                assert hasattr(parent, '_teardown_completed'), "Parent should have _teardown_completed event"
+                assert hasattr(parent, '_teardown_started'), \
+                    "Parent should have _teardown_started event"
+                assert hasattr(parent, '_teardown_completed'), \
+                    "Parent should have _teardown_completed event"
 
                 # Manually signal teardown completion to prevent hanging
                 parent._teardown_completed.set()

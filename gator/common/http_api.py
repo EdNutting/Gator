@@ -87,7 +87,7 @@ class HTTPAPI:
             if self.session is None:
                 await self.start()
             full_url = f"http://{self.url}{self.ROUTE_PREFIX}/{route}"
-            for _ in range(10):
+            for _ in range(self.retries):
                 try:
                     async with self.session.post(
                         full_url, json=kwargs, raise_for_status=True
@@ -100,7 +100,7 @@ class HTTPAPI:
                             )
                         return data
                 except (aiohttp.ClientConnectionError, aiohttp.ClientResponseError):
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(self.delay)
             else:
                 print(
                     f"Failed to POST to {full_url} after {self.retries} retries",
