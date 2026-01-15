@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .common import SchedulerError
-from .local import LocalScheduler
-from .slurm import SlurmScheduler
-
-assert all((LocalScheduler, SchedulerError, SlurmScheduler))
+from .common import SchedulerError as SchedulerError
+from .local import LocalScheduler as LocalScheduler
+from .slurm import SlurmScheduler as SlurmScheduler

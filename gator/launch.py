@@ -97,10 +97,12 @@ async def launch(
     else:
         raise Exception("No specification file provided and no parent server to query")
 
-    # Hint for the type checker and a safety during debugging
-    assert isinstance(parsed_spec, Job | JobArray | JobGroup), \
-        ("Expected specification to be a Job, JobArray or JobGroup, received "
-         f"{type(parsed_spec).__name__}."
+    # Validate spec type for runtime safety and type narrowing
+    if not isinstance(parsed_spec, (Job, JobArray, JobGroup)):
+        raise TypeError(
+            f"Invalid specification type: expected Job, JobArray, or JobGroup, "
+            f"but received {type(parsed_spec).__name__}. "
+            f"Check YAML specification format."
         )
 
     # If an ident has been provided, override whatever the spec gives

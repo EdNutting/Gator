@@ -300,7 +300,11 @@ class BaseLayer:
         self.server.add_route("get_messages", self.get_messages)
         self.server.add_route("resolve", self.resolve)
         # Add handlers for downwards calls
-        assert self.client is not None, "Client is not set?"
+        if self.client is None:
+            raise RuntimeError(
+                "Client is not initialized - cannot add routes for downward calls. "
+                "This indicates a problem with Layer initialization."
+            )
         self.client.add_route("stop", self.stop)
         self.client.add_route("resolve", self.resolve)
         # If linked, ping and then register with the parent
@@ -343,7 +347,12 @@ class BaseLayer:
         code_ok = self.code == 0
         tree_ok = self.metrics.get_group("sub_failed") == 0
         if code_ok and msg_ok and tree_ok:
-            assert self.result != JobResult.FAILURE, "Went from a failing to passing state!?"
+            if self.result == JobResult.FAILURE:
+                raise RuntimeError(
+                    f"Job {self.ident} state transition error: "
+                    f"attempted to transition from FAILURE to SUCCESS - "
+                    f"this indicates a logic bug in result tracking"
+                )
             self.result = JobResult.SUCCESS
             self.metrics.set_own("sub_passed", 1)
             self.metrics.set_own("sub_failed", 0)

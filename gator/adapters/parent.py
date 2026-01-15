@@ -38,10 +38,12 @@ class Parent:
 
     def __init__(self, ws_address: str | None = None):
         self._ws_address = ws_address or Parent.get_parent_address()
-        assert self._ws_address, (
-            "Websocket address for parent process is not set and could not be "
-            "determined from the environment"
-        )
+        if not self._ws_address:
+            raise ValueError(
+                "WebSocket address for parent process is not set and could not be "
+                "determined from the environment. Please provide ws_address parameter "
+                "or set GATOR_PARENT environment variable."
+            )
         self._rx_q = SimpleQueue[dict[str, str]]
         self._tx_q = SimpleQueue[TeardownMarker | dict[str, str]]()
         self._teardown_evt = Event()

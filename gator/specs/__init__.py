@@ -17,10 +17,13 @@ from pathlib import Path
 import yaml
 
 from .common import Dumper, Loader, SpecBase
-from .jobs import Job, JobArray, JobGroup
-from .resource import Cores, Feature, License, Memory
-
-assert all((Job, JobArray, JobGroup, Cores, License, Memory, Feature))
+from .jobs import Job as Job
+from .jobs import JobArray as JobArray
+from .jobs import JobGroup as JobGroup
+from .resource import Cores as Cores
+from .resource import Feature as Feature
+from .resource import License as License
+from .resource import Memory as Memory
 
 
 class Spec:

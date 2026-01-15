@@ -216,7 +216,11 @@ class Database:
                 if self.readonly:
                     raise RuntimeError("Can't push to read-only database!")
                 nonlocal sql_put, transforms_put
-                assert isinstance(item, descr), "Wrong object type"
+                if not isinstance(item, descr):
+                    raise TypeError(
+                        f"Cannot push {type(item).__name__} to {descr.__name__} table - "
+                        f"expected {descr.__name__} instance"
+                    )
                 values = [x(y) for x, y in zip(transforms_put, dataclasses.astuple(item)[1:])]
                 async with self.__db.execute(sql_put, values) as cursor:
                     item.db_uid = cursor.lastrowid
@@ -236,8 +240,16 @@ class Database:
                 if self.readonly:
                     raise RuntimeError("Can't update read-only database!")
                 nonlocal sql_update, transforms_put
-                assert isinstance(item, descr), "Wrong object type"
-                assert item.db_uid is not None, "Object has no UID field"
+                if not isinstance(item, descr):
+                    raise TypeError(
+                        f"Cannot update {type(item).__name__} in {descr.__name__} table - "
+                        f"expected {descr.__name__} instance"
+                    )
+                if item.db_uid is None:
+                    raise ValueError(
+                        f"Cannot update {descr.__name__} without db_uid - "
+                        f"item must be saved to database first"
+                    )
                 params = {
                     k: x(y)
                     for k, x, y in zip(fnames, transforms_put, dataclasses.astuple(item)[1:])

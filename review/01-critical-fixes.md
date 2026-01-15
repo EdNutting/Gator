@@ -101,7 +101,7 @@ have enough experience to know better than to use plain credentials in commands.
 
 ---
 
-## 3. Production Assertions
+## ✅ DONE: 3. Production Assertions
 
 ### Issue: Assertions That Fail Silently with -O Flag
 **Severity:** High
