@@ -93,69 +93,11 @@ def test_scheduler_argument_safety():
 
 ---
 
-## 2. Hardcoded Credentials in Documentation
+## ✅ DONE: 2. Hardcoded Credentials in Documentation
 
-### Issue: PostgreSQL Credentials in README
-**Severity:** Critical
-**Effort:** Small
-**Security Impact:** HIGH - Credential exposure
-
-**Location:** [README.md](../README.md) (Hub database setup section)
-
-**Description:**
-The README contains hardcoded PostgreSQL credentials for the Hub database setup. These credentials will be committed to version control and potentially exposed publicly.
-
-**Current Documentation:**
-```
-postgres=# CREATE USER gator WITH PASSWORD 'dbpasswd123';
-```
-
-**Recommended Approach:**
-1. Remove hardcoded password from README
-2. Reference environment variables instead
-3. Add security guidance about credential management
-
-**Example Implementation:**
-```markdown
-## Hub Database Setup
-
-### Create PostgreSQL Database
-```bash
-# Create user (you'll be prompted for password securely)
-postgres=# CREATE USER gator WITH PASSWORD 'your-secure-password-here';
-
-# Or use environment variable
-export GATOR_DB_PASSWORD=$(openssl rand -base64 32)
-postgres=# CREATE USER gator WITH PASSWORD '$GATOR_DB_PASSWORD';
-```
-
-### Configure Hub
-Set environment variables instead of hardcoding:
-```bash
-export GATOR_DB_HOST="localhost"
-export GATOR_DB_PORT="5432"
-export GATOR_DB_USER="gator"
-export GATOR_DB_PASSWORD="<secure-password>"
-export GATOR_DB_NAME="gator"
-```
-
-**Security Best Practices:**
-- Never commit credentials to version control
-- Use environment variables or secret management tools
-- Rotate credentials regularly
-- Use strong, randomly generated passwords
-
-**Additional Changes Needed:**
-1. Update Hub code to read from environment variables
-2. Add `.env.example` file with placeholder values
-3. Update `.gitignore` to exclude `.env` files
-4. Document credential management in deployment guide
-
-**Impact:**
-- ✅ Eliminates credential exposure risk
-- ✅ Follows security best practices
-- ✅ Enables different credentials per environment
-- ✅ Better production readiness
+This was a non-issue. The credentials are fake credentials that are well
+documented as needing replacing and any user deploying this in production should
+have enough experience to know better than to use plain credentials in commands.
 
 ---
 
